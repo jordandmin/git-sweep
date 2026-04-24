@@ -17,6 +17,17 @@ export interface SweepResult {
   errors: string[];
 }
 
+/**
+ * Sweeps a single git repository by deleting merged branches and optionally
+ * pruning stale remote-tracking references.
+ *
+ * @param repoPath - Absolute or relative path to the git repository.
+ * @param config   - Configuration options controlling which branches to protect,
+ *                   which remote to prune, and other behaviour.
+ * @param dryRun   - When true, no destructive operations are performed; the
+ *                   result still reports what *would* have been changed.
+ * @returns A {@link SweepResult} describing every action taken (or skipped).
+ */
 export async function sweepRepository(
   repoPath: string,
   config: Config,
@@ -53,7 +64,16 @@ export async function sweepRepository(
         continue;
       }
       if (!dryRun) {
-        deleteBranch(repoPath, branch);
+        try {
+          deleteBranch(repoPath, branch);
+        } catch (err) {
+          result.errors.push(
+            `Failed to delete branch "${branch}": ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+          continue;
+        }
       }
       result.deletedBranches.push(branch);
     }
@@ -69,6 +89,14 @@ export async function sweepRepository(
   return result;
 }
 
+/**
+ * Sweeps all repositories listed in the provided configuration.
+ *
+ * @param config  - Configuration containing the list of repository paths and
+ *                  shared sweep options.
+ * @param dryRun  - When true, no destructive operations are performed.
+ * @returns An array of {@link SweepResult}, one entry per repository.
+ */
 export async function sweepAll(
   config: Config,
   dryRun: boolean = false
